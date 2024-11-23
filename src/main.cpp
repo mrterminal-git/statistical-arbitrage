@@ -70,8 +70,6 @@ for (const auto& [pair, stats] : pairs) {
 
 		PairsTradingBackTesting backTesting(stock1Name, stock1Data, stock2Name, stock2Data, pairSelectionData1, pairSelectionData2, 1000);
 
-		std::cout << "Diagnostic output 4\n";
-
         PairsTradingBackTesting::BackTestingConfig config;
         config.entryThreshold = 2.0 * stats.standardDeviation;
         config.exitThreshold = 1.5 * stats.standardDeviation;
