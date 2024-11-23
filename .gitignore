@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+
+# Data and output folder
+data/
+output/
