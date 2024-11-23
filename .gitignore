@@ -31,6 +31,8 @@
 *.out
 *.app
 
-# Data and output folder
+# Data, output, lib folder
 data/
 output/
+lib/
+saved/
