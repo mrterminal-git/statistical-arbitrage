@@ -33,22 +33,6 @@ std::ofstream outFile(Config::getOutputDir() + "Pairs_Backtesting_Results.txt");
 outFile << "Pair,Mean,Standard Deviation,P-value,ADF P-value AIC,ADF P-value BIC,PP Short Rho,PP Long Rho,PP Short Tau,PP Long Tau,KPSS Short,KPSS Long," <<
 "Rate Return,Trade Count,Max Drawdown,Sharpe Ratio\n";
 
-// for (const auto& [pair, stats] : pairs) {
-    // outFile << pair << ","
-            // << stats.mean << ","
-            // << stats.standardDeviation << ","
-            // << stats.pValue << ","
-            // << stats.adfPValueAIC << ","
-            // << stats.adfPValueBIC << ","
-            // << stats.ppPValueShortRho << ","
-            // << stats.ppPValueLongRho << ","
-            // << stats.ppPValueShortTau << ","
-            // << stats.ppPValueLongTau << ","
-            // << stats.kpssPValueShort << ","
-            // << stats.kpssPValueLong << "\n";
-// }
-// outFile.close();
-
 // Back-test for all stocks and record the distribution of the percentage change in portfolio
 const std::string& BACK_TEST_START_DATE = "2023-11-02";
 const std::string& BACK_TEST_END_DATE = "2024-05-02";
