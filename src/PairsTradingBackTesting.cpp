@@ -323,6 +323,69 @@ std::map<std::string, PairsTradingBackTesting::PairStatistics> PairsTradingBackT
     return pairStatistics;
 }
 
+// Select pairs for backtesting
+std::unordered_map<std::string, PairsTradingBackTesting::LNpairStatistic> PairsTradingBackTesting::selectPairsForBackTesting(
+		const std::vector<std::string>& stockListings,
+		const std::string& stockDataDir,
+		const std::string& fileExtension,		
+		const std::string& benchmarkSymbol,
+		const std::string& priceType, 
+		const std::string& startDate, 
+		const std::string& endDate
+	) {
+	// Load benchmark stock data
+	Stock benchmarkStock;
+	FileReader::loadStockDataFromFile(stockDataDir + benchmarkSymbol + fileExtension, benchmarkStock);
+	auto benchmarkData = StockUtils::getPriceDataInRange(benchmarkStock, priceType, startDate, endDate);
+	auto normalizedBenchmarkData = StockAnalysis::normalizeToEarliestDate(benchmarkData);
+
+	// Store results
+	std::unordered_map<std::string, PairsTradingBackTesting::LNpairStatistic> pairResults;
+
+	for (const auto& stockSymbol : stockListings) {
+		Stock stock;
+		FileReader::loadStockDataFromFile(stockDataDir + stockSymbol + fileExtension, stock);
+
+		try {
+			// Retrieve and normalize stock data
+			auto stockData = StockUtils::getPriceDataInRange(stock, priceType, startDate, endDate);
+			auto normalizedStockData = StockAnalysis::normalizeToEarliestDate(stockData);
+
+			// Calculate log differences
+			auto differences = StockAnalysis::calculateDifferenceBetweenData(normalizedStockData, normalizedBenchmarkData);
+			auto sortedDifferences = StockAnalysis::sortMap(differences);
+			auto logDifferences = StockAnalysis::applyMapOperation(differences, [](double value) {
+				return std::log(value);
+			});
+
+			// Perform linear regression
+			auto stats = StatisticalAnalysis::linearRegression(logDifferences);
+
+			// Compute p-value
+			double testStatistic = stats.slope / stats.slopeError;
+			double pValue = StatisticalAnalysis::calculatePValue(testStatistic, logDifferences.size(), "t");
+
+			// Store results
+			pairResults[stockSymbol + "-" + benchmarkSymbol] = {
+				stockSymbol + "-" + benchmarkSymbol,
+				startDate + "-" + endDate,
+				stats.slope,
+				stats.slopeError,
+				logDifferences.size(),
+				testStatistic,				
+				pValue,
+				stats.rSquared,
+				sortedDifferences.back().second // Last difference value
+			};
+		} catch (const std::exception& e) {
+			// Log error and continue
+			std::cerr << "Error processing pair " << stockSymbol << "-" << benchmarkSymbol << ": " << e.what() << "\n";
+		}
+	}
+
+	return pairResults;
+}
+
 void PairsTradingBackTesting::logResults(const std::string& filename) const {
     std::ofstream file;
 
