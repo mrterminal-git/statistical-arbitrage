@@ -8,70 +8,84 @@
 #include "Config.hpp"
 #include "StatisticalAnalysis.hpp"
 
-int main()
-{
-// Creating the vector containing the NYSE stock listings from text file
-const std::string& NYSE_LISTINGS_FILE =  Config::getListingsFilePath();
-std::vector<std::string> nyseListings = FileReader::readNYSEListings(NYSE_LISTINGS_FILE);
+void processPairsForDateRange(
+    const std::vector<std::string>& nyseListings,
+    const std::string& benchmarkStock,
+    const std::string& priceType,
+    const std::string& startDate,
+    const std::string& endDate,
+    const std::string& filename
+) {
+    // Get pairs statistics for the given date range
+    auto functionOutput = PairsTradingBackTesting::selectPairsForBackTesting(
+        nyseListings,
+        Config::getStockDataDir(),
+        ".txt",
+        benchmarkStock,
+        priceType,
+        startDate,
+        endDate
+    );
 
-// Define the stock bin location
-const std::string& STOCK_BIN_LOCATION = Config::getStockDataDir();
-const std::string& TEXT_EXTENSION = ".txt";
+    // Check if the file already exists
+    bool fileExists = std::filesystem::exists(filename);
 
-// Define the start and end date
-const std::string& START_DATE = "2014-11-23", END_DATE = "2024-11-23";
+    // Open the file in append mode
+    std::ofstream outFile(filename, std::ios_base::app);
+    if (!outFile.is_open()) {
+        std::cerr << "Error: Unable to open file " << filename << "\n";
+        return;
+    }
 
-// Define the price type
-const std::string& PRICE_TYPE = "adj close";
+    // Write the header only if the file is newly created
+    if (!fileExists) {
+        outFile << "Pair,Date Range,Slope,Slope Error,Test Statistic,DF,p-value,R-squared,Last Difference\n";
+    }
 
-// Define benchmark stock
-const std::string& BENCHMARK_STOCK = "SPY";
+    // Append the data
+    for (const auto& element : functionOutput) {
+        outFile << element.second.pair << ","
+                << element.second.pairDateRange << ","
+                << element.second.slope << ","
+                << element.second.slopeError << ","
+                << element.second.df << ","
+                << element.second.testStatistic << ","
+                << element.second.pValue << ","
+                << element.second.rSquared << ","
+                << element.second.lastDifference << "\n";
+    }
 
-// Compare against function version and output
-auto functionOutput = PairsTradingBackTesting::selectPairsForBackTesting(
-	nyseListings,
-	Config::getStockDataDir(),
-	TEXT_EXTENSION,
-	BENCHMARK_STOCK,
-	PRICE_TYPE,
-	START_DATE,
-	END_DATE
-);	
-
-std::ofstream outFile(Config::getOutputDir() + "LN_Difference_Pairs_2.txt");
-outFile << "Pair,Date Range,Slope,Slope Error,Test Statistic,DF,p-value,R-squared,last difference\n";
-for(auto element : functionOutput) {
-	outFile << 	
-	element.second.pair << "," <<
-	element.second.pairDateRange << "," <<
-	element.second.slope << "," <<
-	element.second.slopeError << "," <<
-	element.second.df << "," <<
-	element.second.testStatistic << "," <<
-	element.second.pValue << "," << 
-	element.second.rSquared << "," << 
-	element.second.lastDifference << 
-	"\n";
-	
+    outFile.close();
 }
-outFile.close();
 
+int main() {
+    // Create the vector containing the NYSE stock listings from the text file
+    const std::string& nyseListingsFile = Config::getListingsFilePath();
+    std::vector<std::string> nyseListings = FileReader::readNYSEListings(nyseListingsFile);
 
-// std::ofstream outFile(Config::getOutputDir() + "LN_Difference_Dutput.txt");
-// outFile << "Date,Difference\n";
-// for(auto element : sortedLnDiff) {
-	// outFile << element.first << "," << element.second << "\n";
-	
-// }
-// outFile.close();
+    // Define benchmark stock and price type
+    const std::string& benchmarkStock = "SPY";
+    const std::string& priceType = "adj close";
 
+    // Define output file
+    const std::string& filename = Config::getOutputDir() + "LN_Difference_Pairs.txt";
 
-// // Output results
-// std::cout << "Linear fit parameters:\n" << 
-// "b1,b1 error,b0,b0 error\n" << 
-// stats.slope << "," << stats.slopeError << "," <<
-// stats.intercept << "," << stats.interceptError <<
-// "\n";
+    // Process different date ranges
+    std::vector<std::pair<std::string, std::string>> dateRanges = {
+        {"2014-11-23", "2024-11-23"},
+        {"2019-11-23", "2024-11-23"},
+        {"2021-11-23", "2024-11-23"},
+        {"2022-11-23", "2024-11-23"},
+        {"2023-11-23", "2024-11-23"},
+		{"2024-05-23", "2024-11-23"},
+		{"2024-08-23", "2024-11-23"},
+		{"2024-09-23", "2024-11-23"},
+		{"2024-10-23", "2024-11-23"}
+    };
 
-return 0;
+    for (const auto& [startDate, endDate] : dateRanges) {
+        processPairsForDateRange(nyseListings, benchmarkStock, priceType, startDate, endDate, filename);
+    }
+
+    return 0;
 }
