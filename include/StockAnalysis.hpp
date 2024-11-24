@@ -71,6 +71,12 @@ public:
     const std::unordered_map<std::string, double>& dataToNormalize,
     const std::unordered_map<std::string, double>& referenceData);
 	
+	// Function to apply a mathematical operation to values in a map
+	static std::unordered_map<std::string, double> applyMapOperation(
+		const std::unordered_map<std::string, double>& data,
+		const std::function<double(double)>& operation
+	);
+	
 private:
     // Cache for calculated statistics; uses the address of the dataset as the key
     static std::unordered_map<const std::unordered_map<std::string, double>*, std::pair<double, double>> statisticsCache;

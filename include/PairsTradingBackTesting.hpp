@@ -6,6 +6,7 @@
 #include "FileReader.hpp"
 #include "StockUtils.hpp"
 #include "StandardNormalDistribution.hpp"
+#include "StatisticalAnalysis.hpp"
 #include "Config.hpp"
 
 class PairsTradingBackTesting : public BackTesting {
@@ -31,6 +32,19 @@ public:
         double slippage = 0.0;
     };
 
+	// For the output of selectPairsForBackTesting(benchmark)
+	struct LNpairStatistic{
+		std::string pair;
+		std::string pairDateRange;
+		double slope;
+		double slopeError;
+		int df;
+		double testStatistic;
+		double pValue;
+		double rSquared;
+		double lastDifference;
+	};
+
     PairsTradingBackTesting(const std::string& stock1Name,
                             const std::unordered_map<std::string, double>& stock1Data,
                             const std::string& stock2Name,
@@ -51,6 +65,16 @@ public:
 		const std::string& startDate,
 		const std::string& endDate,
 		double priceVolumeThreshold);
+
+	static std::unordered_map<std::string, PairsTradingBackTesting::LNpairStatistic> selectPairsForBackTesting(
+		const std::vector<std::string>& stockListings,
+		const std::string& stockDataDir,
+		const std::string& fileExtension,		
+		const std::string& benchmarkSymbol,
+		const std::string& priceType, 
+		const std::string& startDate, 
+		const std::string& endDate
+	);
 
 	// Override the logResults functions
 	void logResults(const std::string& filename) const override; // Override logResults

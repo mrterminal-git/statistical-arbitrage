@@ -14,6 +14,8 @@
 #include <cstdlib> 
 #include <functional>
 #include <filesystem>
+#include <tuple>
+#include <exception>
 
 #include "URT.hpp"
 
