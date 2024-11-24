@@ -6,6 +6,7 @@
 #include "StandardNormalDistribution.hpp"
 #include "PairsTradingBackTesting.hpp"
 #include "Config.hpp"
+#include "StatisticalAnalysis.hpp"
 
 int main()
 {
@@ -18,79 +19,134 @@ const std::string& STOCK_BIN_LOCATION = Config::getStockDataDir();
 const std::string& TEXT_EXTENSION = ".txt";
 
 // Define the start and end date
-const std::string& START_DATE = "2022-11-01", END_DATE = "2023-11-01";
+const std::string& START_DATE = "2014-11-23", END_DATE = "2024-11-23";
 
 // Define the price type
 const std::string& PRICE_TYPE = "adj close";
 
-// Define the price-volume threshold for liquidity
-const double PRICE_VOLUME_THRESH = 500000;
+// Loading base stock
+Stock stock2;
+const std::string& stock2Symbol = "SPY";
+FileReader::loadStockDataFromFile(Config::getStockDataDir() + stock2Symbol + TEXT_EXTENSION, stock2);
+std::unordered_map<std::string, double> stock2Data = StockUtils::getPriceDataInRange(stock2, PRICE_TYPE, START_DATE, END_DATE);
+std::unordered_map<std::string, double> stock2NormalizedData = StockAnalysis::normalizeToEarliestDate(stock2Data);
 
-std::map<std::string, PairsTradingBackTesting::PairStatistics> pairs = PairsTradingBackTesting::selectPairsForBackTesting(
-    nyseListings, STOCK_BIN_LOCATION, TEXT_EXTENSION, PRICE_TYPE, START_DATE, END_DATE, PRICE_VOLUME_THRESH);
 
-std::ofstream outFile(Config::getOutputDir() + "Pairs_Backtesting_Results.txt");
-outFile << "Pair,Mean,Standard Deviation,P-value,ADF P-value AIC,ADF P-value BIC,PP Short Rho,PP Long Rho,PP Short Tau,PP Long Tau,KPSS Short,KPSS Long," <<
-"Rate Return,Trade Count,Max Drawdown,Sharpe Ratio\n";
+struct LNpairStatistic{
+	std::string pair;
+	std::string pairDateRange;
+	double slope;
+	double slopeError;
+	int df;
+	double testStatistic;
+	double pValue;
+	double rSquared;
+	double lastDifference;
+};
 
-// Back-test for all stocks and record the distribution of the percentage change in portfolio
-const std::string& BACK_TEST_START_DATE = "2023-11-02";
-const std::string& BACK_TEST_END_DATE = "2024-05-02";
-for (const auto& [pair, stats] : pairs) {
-    try {
-        size_t delimiterPos = pair.find("-");
-        std::string stock1Name = pair.substr(0, delimiterPos);
-        std::string stock2Name = pair.substr(delimiterPos + 1);
+// Initialize map to store results
+std::unordered_map<std::string, LNpairStatistic> pairResults;
+ 
+for(const std::string& nyseListing : nyseListings) {
+	// Loading comparison data
+	Stock stock1;
+	
+	const std::string& stock1Symbol = nyseListing;
 
-        Stock stock1, stock2;
-        FileReader::loadStockDataFromFile(STOCK_BIN_LOCATION + stock1Name + TEXT_EXTENSION, stock1);
-        FileReader::loadStockDataFromFile(STOCK_BIN_LOCATION + stock2Name + TEXT_EXTENSION, stock2);
+	std::cout << "-----------------------------\n" << stock1Symbol << "-" << stock2Symbol  << "\n";
+	
+	// Loading the data into stock object
+	FileReader::loadStockDataFromFile(Config::getStockDataDir() + stock1Symbol + TEXT_EXTENSION, stock1);
+	
+	// Get the specific price type and date range data
+	std::unordered_map<std::string, double> stock1Data = StockUtils::getPriceDataInRange(stock1, PRICE_TYPE, START_DATE, END_DATE);
+
+	// Normalize the data
+	std::unordered_map<std::string, double> stock1NormalizedData;
+	try{
+		stock1NormalizedData = StockAnalysis::normalizeToEarliestDate(stock1Data);
+	
+	} catch (std::exception& e){
+		std::cout << e.what() << "\n";
+		continue;
 		
-        auto stock1Data = StockUtils::getPriceDataInRange(stock1, PRICE_TYPE, BACK_TEST_START_DATE, BACK_TEST_END_DATE);
-        auto stock2Data = StockUtils::getPriceDataInRange(stock2, PRICE_TYPE, BACK_TEST_START_DATE, BACK_TEST_END_DATE);
-		
-		auto pairSelectionData1 = StockUtils::getPriceDataInRange(stock1, PRICE_TYPE, START_DATE, END_DATE);
-		auto pairSelectionData2 = StockUtils::getPriceDataInRange(stock2, PRICE_TYPE, START_DATE, END_DATE);
+	}
 
-		PairsTradingBackTesting backTesting(stock1Name, stock1Data, stock2Name, stock2Data, pairSelectionData1, pairSelectionData2, 1000);
+	// Get the difference
+	std::unordered_map<std::string, double> differenceOfNormalized = StockAnalysis::calculateDifferenceBetweenData(stock1NormalizedData, stock2NormalizedData);
 
-        PairsTradingBackTesting::BackTestingConfig config;
-        config.entryThreshold = 2.0 * stats.standardDeviation;
-        config.exitThreshold = 1.5 * stats.standardDeviation;
-        config.tradeAmount = 100.0;
-		config.slippage = 0;
+	// Get the sorted version
+	std::vector<std::pair<std::string, double>> sortedDifferenceOfNormalzied = StockAnalysis::sortMap(differenceOfNormalized);
 
-        backTesting.run(config);
+	// Get the LN(difference)
+	std::unordered_map<std::string, double> LnDifferenceOfNormalized 
+		= StockAnalysis::applyMapOperation(differenceOfNormalized, [](double value) { return std::log(value); });
 
-        double rateReturn = 100.0 / backTesting.getInitialBalance() * (backTesting.getCurrentBalance() - backTesting.getInitialBalance()); // Convert to %
-        double sharpeRatio = backTesting.calculateSharpeRatio();
-        double maxDrawdown = backTesting.calculateMaximumDrawdown();
+	// Perform linear regression get linear fit
+	StatisticalAnalysis::LinearRegressionResult stats = StatisticalAnalysis::linearRegression(LnDifferenceOfNormalized);
 
-        outFile << pair << ","
-                << stats.mean << ","
-                << stats.standardDeviation << ","
-                << stats.pValue << ","
-                << stats.adfPValueAIC << ","
-                << stats.adfPValueBIC << ","
-                << stats.ppPValueShortRho << ","
-                << stats.ppPValueLongRho << ","
-                << stats.ppPValueShortTau << ","
-                << stats.ppPValueLongTau << ","
-                << stats.kpssPValueShort << ","
-                << stats.kpssPValueLong << ","
-                << rateReturn << ","
-                << backTesting.getTradeCount() << ","
-                << maxDrawdown << ","
-                << sharpeRatio << "\n";
+	// Get the t-student p-value of the linear fit
+	double linearFitPvalue;
+	try {
+		linearFitPvalue = StatisticalAnalysis::calculatePValue(
+		stats.slope / stats.slopeError,
+		LnDifferenceOfNormalized.size(),
+		"t");
+	} catch (std::exception& e) {
+		std::cout << e.what() << "\n";
+		continue;
+	}
 
-		// Output all trades
-		backTesting.logResults(Config::getOutputDir() + "Pairs_Backtesting_Results_Trades.txt");
+	LNpairStatistic currentPairStatistics = {
+		stock1Symbol + "-" + stock2Symbol,
+		START_DATE + "-" + END_DATE,
+		stats.slope, 
+		stats.slopeError,
+		LnDifferenceOfNormalized.size(),
+		stats.slope / stats.slopeError,
+		linearFitPvalue,
+		stats.rSquared,
+		sortedDifferenceOfNormalzied.back().second
+	};
+	
+	pairResults[stock1Symbol + "-" + stock2Symbol] = currentPairStatistics;
+}
 
-    } catch (const std::exception& e) {
-        std::cerr << "Error processing pair " << pair << ": " << e.what() << "\n";
-    }
+// Output all results into a file
+std::ofstream outFile(Config::getOutputDir() + "LN_Difference_Pairs.txt");
+outFile << "Pair,Date Range,Slope,Slope Error,Test Statistic,DF,p-value,R-squared,last difference\n";
+for(auto element : functionOutput) {
+	outFile << 	
+	element.second.pair << "," <<
+	element.second.pairDateRange << "," <<
+	element.second.slope << "," <<
+	element.second.slopeError << "," <<
+	element.second.df << "," <<
+	element.second.testStatistic << "," <<
+	element.second.pValue << "," << 
+	element.second.rSquared << "," << 
+	element.second.lastDifference << 
+	"\n";
+	
 }
 outFile.close();
+
+
+// std::ofstream outFile(Config::getOutputDir() + "LN_Difference_Dutput.txt");
+// outFile << "Date,Difference\n";
+// for(auto element : sortedLnDiff) {
+	// outFile << element.first << "," << element.second << "\n";
+	
+// }
+// outFile.close();
+
+
+// // Output results
+// std::cout << "Linear fit parameters:\n" << 
+// "b1,b1 error,b0,b0 error\n" << 
+// stats.slope << "," << stats.slopeError << "," <<
+// stats.intercept << "," << stats.interceptError <<
+// "\n";
 
 return 0;
 }

@@ -371,6 +371,33 @@ std::unordered_map<std::string, double> StockAnalysis::normalizeToReferenceData(
     return normalizedData;
 }
 
+// Function to apply a mathematical operation to values in a map
+std::unordered_map<std::string, double> StockAnalysis::applyMapOperation(
+	const std::unordered_map<std::string, double>& data,
+	const std::function<double(double)>& operation
+) {
+	std::unordered_map<std::string, double> result;
+
+	for (const auto& [key, value] : data) {
+		try {
+			// Attempt to apply the operation
+			double operatedValue = operation(value);
+
+			// Check for invalid results (e.g., NaN, infinity)
+			if (std::isnan(operatedValue) || std::isinf(operatedValue)) {
+				operatedValue = 0.0; // Set invalid results to 0
+			}
+
+			result[key] = operatedValue;
+		} catch (...) {
+			// Catch any exceptions and set the value to 0
+			result[key] = 0.0;
+		}
+	}
+
+	return result;
+}
+
 // Method to clear the cache
 void StockAnalysis::clearCache(){
 	statisticsCache.clear();
